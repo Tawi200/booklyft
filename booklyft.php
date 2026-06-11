@@ -1,8 +1,8 @@
 <?php
 /*
 Plugin Name: Booklyft
-Description: Booking system with services, slots, calendar, bookings, admin management, and notifications.
-Version: 1.3.0
+Description: Booking system with editable bookings, AJAX slots, rescheduling, services, admin management, and notifications.
+Version: 1.4.0
 Author: Tawanda Onyimo
 Text Domain: booklyft
 */
@@ -10,7 +10,7 @@ Text Domain: booklyft
 if (!defined('ABSPATH')) exit;
 
 class Booklyft {
-    const VERSION = '1.3.0';
+    const VERSION = '1.4.0';
     const BOOKINGS_TABLE = 'booklyft_bookings';
     const SERVICES_TABLE = 'booklyft_services';
     const SETTINGS_KEY = 'booklyft_settings';
@@ -19,18 +19,20 @@ class Booklyft {
         add_action('init', [$this, 'register_cpt']);
         add_action('admin_menu', [$this, 'admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
+        add_action('wp_enqueue_scripts', [$this, 'enqueue_front_assets']);
         add_action('admin_post_booklyft_save_service', [$this, 'save_service']);
         add_action('admin_post_booklyft_delete_service', [$this, 'delete_service']);
         add_action('admin_post_booklyft_update_booking', [$this, 'update_booking']);
         add_action('admin_post_booklyft_submit_booking', [$this, 'handle_booking']);
         add_action('admin_post_nopriv_booklyft_submit_booking', [$this, 'handle_booking']);
+        add_action('wp_ajax_booklyft_get_slots', [$this, 'ajax_get_slots']);
+        add_action('wp_ajax_nopriv_booklyft_get_slots', [$this, 'ajax_get_slots']);
+        add_action('wp_ajax_booklyft_check_availability', [$this, 'ajax_check_availability']);
+        add_action('wp_ajax_nopriv_booklyft_check_availability', [$this, 'ajax_check_availability']);
         add_shortcode('booklyft_booking_form', [$this, 'booking_form_shortcode']);
         add_shortcode('booklyft_services', [$this, 'services_shortcode']);
         add_shortcode('booklyft_calendar', [$this, 'calendar_shortcode']);
-        add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
-        add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
-        add_action('wp_ajax_booklyft_check_availability', [$this, 'ajax_check_availability']);
-        add_action('wp_ajax_nopriv_booklyft_check_availability', [$this, 'ajax_check_availability']);
     }
 
     public static function activate() {
@@ -147,6 +149,7 @@ class Booklyft {
         .booklyft-table td{padding:10px;border-bottom:1px solid #f2e3e1;vertical-align:top}
         .booklyft-field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
         .booklyft-field input,.booklyft-field select,.booklyft-field textarea{padding:10px;border:1px solid #d8c2bf;border-radius:8px}
+        .booklyft-field input:focus,.booklyft-field select:focus,.booklyft-field textarea:focus{border-color:' . esc_attr($s['admin_accent']) . ';box-shadow:0 0 0 1px ' . esc_attr($s['admin_accent']) . ';outline:none}
         .booklyft-pill{display:inline-block;background:#fbeceb;color:' . esc_attr($s['admin_color']) . ';padding:5px 10px;border-radius:999px;font-size:12px}
         .booklyft-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
         .booklyft-slot{display:inline-block;margin:4px 6px 4px 0;padding:8px 10px;border-radius:999px;border:1px solid #d8c2bf;background:#fff}
@@ -157,7 +160,11 @@ class Booklyft {
         </style>';
     }
 
-    public function enqueue_assets() {
+    public function enqueue_admin_assets() {
+        echo $this->admin_css();
+    }
+
+    public function enqueue_front_assets() {
         wp_register_style('booklyft', false, [], self::VERSION);
         wp_add_inline_style('booklyft', '.booklyft-wrap{max-width:900px;margin:20px auto;padding:20px;border:1px solid #ddd;border-radius:10px}.booklyft-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.booklyft-field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}.booklyft-field input,.booklyft-field select,.booklyft-field textarea{padding:10px;border:1px solid #ccc;border-radius:6px}.booklyft-btn{background:#1e73be;color:#fff;border:none;padding:12px 16px;border-radius:6px;cursor:pointer}.booklyft-msg{padding:10px;margin:10px 0;border-radius:6px}.booklyft-ok{background:#e7f7ea;color:#1c6b2a}.booklyft-err{background:#fdecec;color:#a11}.booklyft-table{width:100%;border-collapse:collapse}.booklyft-table th,.booklyft-table td{border:1px solid #ddd;padding:8px;text-align:left}');
         wp_enqueue_style('booklyft');
@@ -187,9 +194,13 @@ class Booklyft {
         return $slots;
     }
 
-    private function booked_times_for_date($date) {
+    private function booked_times_for_date($date, $exclude_id = 0) {
         global $wpdb;
-        $rows = $wpdb->get_col($wpdb->prepare("SELECT booking_time FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE booking_date=%s AND status IN ('pending','confirmed')", $date));
+        if ($exclude_id) {
+            $rows = $wpdb->get_col($wpdb->prepare("SELECT booking_time FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE booking_date=%s AND id!=%d AND status IN ('pending','confirmed')", $date, $exclude_id));
+        } else {
+            $rows = $wpdb->get_col($wpdb->prepare("SELECT booking_time FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE booking_date=%s AND status IN ('pending','confirmed')", $date));
+        }
         return array_map(fn($v) => substr($v,0,5), $rows ?: []);
     }
 
@@ -197,37 +208,60 @@ class Booklyft {
         global $wpdb;
         $services = $wpdb->get_results("SELECT id,name,price,duration FROM {$wpdb->prefix}" . self::SERVICES_TABLE . " WHERE active=1 ORDER BY name ASC");
         $s = $this->get_settings();
-        $date = date('Y-m-d');
-        $slots = $this->get_slots_for_date($date);
-        $booked = $this->booked_times_for_date($date);
         ob_start();
         ?>
         <div class="booklyft-wrap">
             <div class="booklyft-hero"><h2><?php echo esc_html($s['brand_name']); ?></h2><p>Book your appointment in a few simple steps.</p></div>
             <div class="booklyft-card">
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="booklyft-form">
                     <input type="hidden" name="action" value="booklyft_submit_booking">
+                    <input type="hidden" name="booking_id" value="0">
                     <?php wp_nonce_field('booklyft_book', 'booklyft_nonce'); ?>
                     <div class="booklyft-grid">
                         <div class="booklyft-field"><label>Name</label><input required type="text" name="customer_name"></div>
                         <div class="booklyft-field"><label>Email</label><input required type="email" name="customer_email"></div>
                         <div class="booklyft-field"><label>Phone</label><input type="text" name="customer_phone"></div>
-                        <div class="booklyft-field"><label>Service</label><select required name="service_id"><?php foreach ($services as $service) : ?><option value="<?php echo esc_attr($service->id); ?>"><?php echo esc_html($service->name . ' - ' . intval($service->duration) . ' mins'); ?></option><?php endforeach; ?></select></div>
-                        <div class="booklyft-field"><label>Date</label><input required type="date" name="booking_date" value="<?php echo esc_attr($date); ?>"></div>
-                        <div class="booklyft-field"><label>Time</label><input required type="time" name="booking_time"></div>
+                        <div class="booklyft-field"><label>Service</label><select required name="service_id" id="booklyft-service"><?php foreach ($services as $service) : ?><option value="<?php echo esc_attr($service->id); ?>"><?php echo esc_html($service->name . ' - ' . intval($service->duration) . ' mins'); ?></option><?php endforeach; ?></select></div>
+                        <div class="booklyft-field"><label>Date</label><input required type="date" name="booking_date" id="booklyft-date"></div>
+                        <div class="booklyft-field"><label>Time</label><select required name="booking_time" id="booklyft-time"><option value="">Choose a date first</option></select></div>
                     </div>
                     <div class="booklyft-field"><label>Notes</label><textarea name="notes" rows="4"></textarea></div>
                     <button class="booklyft-btn" type="submit">Submit Booking</button>
                 </form>
             </div>
-            <div class="booklyft-card">
-                <h3>Today’s Slots</h3>
-                <p><?php echo esc_html($date); ?></p>
-                <?php foreach ($slots as $slot): $busy = in_array($slot, $booked, true); ?>
-                    <span class="booklyft-slot <?php echo $busy ? 'booklyft-slot-busy' : ''; ?>"><?php echo esc_html($slot); ?></span>
-                <?php endforeach; ?>
-            </div>
+            <div class="booklyft-card"><h3>Today’s Slots</h3><div id="booklyft-slot-list"></div></div>
         </div>
+        <script>
+        (function(){
+          const dateEl=document.getElementById('booklyft-date');
+          const timeEl=document.getElementById('booklyft-time');
+          const slotList=document.getElementById('booklyft-slot-list');
+          async function loadSlots(){
+            const date=dateEl.value;
+            if(!date)return;
+            const url=new URL('<?php echo esc_url(admin_url('admin-ajax.php')); ?>');
+            url.searchParams.set('action','booklyft_get_slots');
+            url.searchParams.set('date',date);
+            const res=await fetch(url);
+            const json=await res.json();
+            timeEl.innerHTML='';
+            slotList.innerHTML='';
+            (json.data.slots||[]).forEach(s=>{
+              const o=document.createElement('option');
+              o.value=s.time;
+              o.textContent=s.time+(s.available?'':' (booked)');
+              if(!s.available)o.disabled=true;
+              timeEl.appendChild(o);
+              const span=document.createElement('span');
+              span.className='booklyft-slot '+(s.available?'':'booklyft-slot-busy');
+              span.textContent=s.time;
+              slotList.appendChild(span);
+            });
+          }
+          dateEl.addEventListener('change',loadSlots);
+          if(dateEl.value) loadSlots();
+        })();
+        </script>
         <?php
         return ob_get_clean();
     }
@@ -238,44 +272,79 @@ class Booklyft {
         ob_start();
         echo '<div class="booklyft-wrap"><div class="booklyft-hero"><h2>Booking Calendar</h2><p>Recent activity by day.</p></div><div class="booklyft-grid">';
         foreach ($days as $day) {
-            $bookings = $wpdb->get_results($wpdb->prepare("SELECT b.booking_time, b.status, b.customer_name, s.name AS service_name FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " b LEFT JOIN {$wpdb->prefix}" . self::SERVICES_TABLE . " s ON s.id=b.service_id WHERE b.booking_date=%s ORDER BY b.booking_time ASC", $day->booking_date));
+            $bookings = $wpdb->get_results($wpdb->prepare("SELECT b.booking_time, b.status, b.customer_name, s.name AS service_name, b.id FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " b LEFT JOIN {$wpdb->prefix}" . self::SERVICES_TABLE . " s ON s.id=b.service_id WHERE b.booking_date=%s ORDER BY b.booking_time ASC", $day->booking_date));
             echo '<div class="booklyft-day"><h3>' . esc_html($day->booking_date) . ' <span class="booklyft-pill">' . intval($day->total) . ' bookings</span></h3><ul>';
-            foreach ($bookings as $b) echo '<li><strong>' . esc_html($b->booking_time) . '</strong> - ' . esc_html($b->customer_name) . ' (' . esc_html($b->service_name) . ') <em>' . esc_html($b->status) . '</em></li>';
+            foreach ($bookings as $b) {
+                $edit = wp_nonce_url(admin_url('admin.php?page=booklyft-edit-booking&id=' . intval($b->id)), 'booklyft_edit_booking_' . intval($b->id));
+                echo '<li><strong>' . esc_html($b->booking_time) . '</strong> - ' . esc_html($b->customer_name) . ' (' . esc_html($b->service_name) . ') <em>' . esc_html($b->status) . '</em> <a href="' . esc_url($edit) . '">edit</a></li>';
+            }
             echo '</ul></div>';
         }
         echo '</div></div>';
         return ob_get_clean();
     }
 
-    public function handle_booking() {
-        if (!isset($_POST['booklyft_nonce']) || !wp_verify_nonce($_POST['booklyft_nonce'], 'booklyft_book')) wp_die('Invalid nonce');
-        global $wpdb;
-        $data = [
-            'service_id' => absint($_POST['service_id']),
-            'customer_name' => sanitize_text_field($_POST['customer_name']),
-            'customer_email' => sanitize_email($_POST['customer_email']),
-            'customer_phone' => sanitize_text_field($_POST['customer_phone'] ?? ''),
-            'booking_date' => sanitize_text_field($_POST['booking_date']),
-            'booking_time' => sanitize_text_field($_POST['booking_time']),
-            'notes' => sanitize_textarea_field($_POST['notes'] ?? ''),
-            'status' => 'pending',
-            'updated_at' => current_time('mysql'),
-        ];
-        $wpdb->insert($wpdb->prefix . self::BOOKINGS_TABLE, $data);
-        $service = $wpdb->get_row($wpdb->prepare("SELECT name FROM {$wpdb->prefix}" . self::SERVICES_TABLE . " WHERE id=%d", $data['service_id']));
-        $settings = $this->get_settings();
-        add_filter('wp_mail_from', function() use ($settings) { return $settings['from_email']; });
-        wp_mail($data['customer_email'], 'Booking Received', 'Your booking for ' . ($service->name ?? 'service') . ' has been received.');
-        wp_redirect(add_query_arg('booklyft', 'success', wp_get_referer() ?: home_url('/')));
-        exit;
+    public function ajax_get_slots() {
+        $date = sanitize_text_field($_GET['date'] ?? '');
+        if (!$date) wp_send_json_success(['slots' => []]);
+        $slots = $this->get_slots_for_date($date);
+        $booked = $this->booked_times_for_date($date, absint($_GET['exclude_id'] ?? 0));
+        $out = [];
+        foreach ($slots as $slot) {
+            $out[] = ['time' => $slot, 'available' => !in_array($slot, $booked, true)];
+        }
+        wp_send_json_success(['slots' => $out]);
     }
 
     public function ajax_check_availability() {
         global $wpdb;
         $date = sanitize_text_field($_GET['date'] ?? '');
         $time = sanitize_text_field($_GET['time'] ?? '');
-        $count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE booking_date=%s AND booking_time=%s AND status IN ('pending','confirmed')", $date, $time));
+        $exclude = absint($_GET['exclude_id'] ?? 0);
+        $sql = "SELECT COUNT(*) FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE booking_date=%s AND booking_time=%s AND status IN ('pending','confirmed')";
+        $args = [$date, $time];
+        if ($exclude) {
+            $sql .= " AND id!=%d";
+            $args[] = $exclude;
+        }
+        $count = $wpdb->get_var($wpdb->prepare($sql, ...$args));
         wp_send_json_success(['available' => ((int)$count === 0)]);
+    }
+
+    private function send_booking_email($email, $subject, $message) {
+        $settings = $this->get_settings();
+        add_filter('wp_mail_from', function() use ($settings) { return $settings['from_email']; });
+        wp_mail($email, $subject, $message);
+    }
+
+    public function handle_booking() {
+        if (!isset($_POST['booklyft_nonce']) || !wp_verify_nonce($_POST['booklyft_nonce'], 'booklyft_book')) wp_die('Invalid nonce');
+        global $wpdb;
+        $booking_id = absint($_POST['booking_id'] ?? 0);
+        $service_id = absint($_POST['service_id']);
+        $date = sanitize_text_field($_POST['booking_date']);
+        $time = sanitize_text_field($_POST['booking_time']);
+        $data = [
+            'service_id' => $service_id,
+            'customer_name' => sanitize_text_field($_POST['customer_name']),
+            'customer_email' => sanitize_email($_POST['customer_email']),
+            'customer_phone' => sanitize_text_field($_POST['customer_phone'] ?? ''),
+            'booking_date' => $date,
+            'booking_time' => $time,
+            'notes' => sanitize_textarea_field($_POST['notes'] ?? ''),
+            'updated_at' => current_time('mysql'),
+        ];
+        if ($booking_id) {
+            $data['status'] = sanitize_text_field($_POST['status'] ?? 'pending');
+            $wpdb->update($wpdb->prefix . self::BOOKINGS_TABLE, $data, ['id' => $booking_id]);
+        } else {
+            $data['status'] = 'pending';
+            $wpdb->insert($wpdb->prefix . self::BOOKINGS_TABLE, $data);
+        }
+        $service = $wpdb->get_row($wpdb->prepare("SELECT name FROM {$wpdb->prefix}" . self::SERVICES_TABLE . " WHERE id=%d", $service_id));
+        $this->send_booking_email($data['customer_email'], 'Booking Received', 'Your booking for ' . ($service->name ?? 'service') . ' has been received.');
+        wp_redirect(add_query_arg('booklyft', 'success', wp_get_referer() ?: home_url('/')));
+        exit;
     }
 
     public function admin_page() {
@@ -284,14 +353,17 @@ class Booklyft {
         $bookings = $wpdb->get_results("SELECT b.*, s.name AS service_name FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " b LEFT JOIN {$wpdb->prefix}" . self::SERVICES_TABLE . " s ON s.id=b.service_id ORDER BY b.id DESC LIMIT 200");
         echo '<div class="wrap booklyft-wrap"><div class="booklyft-hero"><h1>Booklyft Bookings</h1><p>Manage appointments in your branded dashboard.</p></div><div class="booklyft-card"><table class="booklyft-table"><thead><tr><th>ID</th><th>Customer</th><th>Service</th><th>Date</th><th>Time</th><th>Status</th><th>Action</th></tr></thead><tbody>';
         foreach ($bookings as $row) {
+            $edit_url = wp_nonce_url(admin_url('admin.php?page=booklyft-edit-booking&id=' . intval($row->id)), 'booklyft_edit_booking_' . intval($row->id));
             $confirm_url = wp_nonce_url(admin_url('admin-post.php?action=booklyft_update_booking&id=' . intval($row->id) . '&status=confirmed'), 'booklyft_update_booking_' . intval($row->id));
             $cancel_url = wp_nonce_url(admin_url('admin-post.php?action=booklyft_update_booking&id=' . intval($row->id) . '&status=cancelled'), 'booklyft_update_booking_' . intval($row->id));
-            echo '<tr><td>' . intval($row->id) . '</td><td>' . esc_html($row->customer_name) . '</td><td>' . esc_html($row->service_name) . '</td><td>' . esc_html($row->booking_date) . '</td><td>' . esc_html($row->booking_time) . '</td><td><span class="booklyft-pill">' . esc_html($row->status) . '</span></td><td><a class="button" href="' . esc_url($confirm_url) . '">Confirm</a> <a class="button" href="' . esc_url($cancel_url) . '">Cancel</a></td></tr>';
+            echo '<tr><td>' . intval($row->id) . '</td><td>' . esc_html($row->customer_name) . '</td><td>' . esc_html($row->service_name) . '</td><td>' . esc_html($row->booking_date) . '</td><td>' . esc_html($row->booking_time) . '</td><td><span class="booklyft-pill">' . esc_html($row->status) . '</span></td><td><a class="button" href="' . esc_url($edit_url) . '">Edit</a> <a class="button" href="' . esc_url($confirm_url) . '">Confirm</a> <a class="button" href="' . esc_url($cancel_url) . '">Cancel</a></td></tr>';
         }
         echo '</tbody></table></div></div>';
     }
 
-    public function calendar_page() { echo do_shortcode('[booklyft_calendar]'); }
+    public function calendar_page() {
+        echo do_shortcode('[booklyft_calendar]');
+    }
 
     public function services_page() {
         global $wpdb;

@@ -42,3 +42,10 @@ Version 1.3 adds:
 - Calendar shortcode improvements
 - Booking status actions
 - Logo-colored admin styling
+
+# Version 1.4 adds:
+- Editable bookings from admin
+- AJAX slot loading by date
+- Rescheduling-ready booking flow
+- Better frontend time selection
+- Continued Booklyft branding in admin
