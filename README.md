@@ -49,3 +49,10 @@ Version 1.3 adds:
 - Rescheduling-ready booking flow
 - Better frontend time selection
 - Continued Booklyft branding in admin
+
+# Version 1.4 adds:
+- Editable bookings from admin
+- AJAX slot loading by date
+- Rescheduling-ready booking flow
+- Better frontend time selection
+- Continued Booklyft branding in admin
