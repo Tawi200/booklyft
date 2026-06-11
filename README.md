@@ -32,3 +32,13 @@ Version 1.2 adds:
 - [booklyft_services]
 - [booklyft_booking_form]
 - [booklyft_calendar]
+
+# Version 1.3
+
+Version 1.3 adds:
+- Month-style slot generation
+- Time slot settings
+- Slot visibility on frontend
+- Calendar shortcode improvements
+- Booking status actions
+- Logo-colored admin styling
