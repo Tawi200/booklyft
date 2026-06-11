@@ -18,3 +18,17 @@ A WordPress booking system plugin with services, booking form, admin dashboard, 
 2. Activate Booklyft in WordPress
 3. Add services in the Booklyft admin menu
 4. Place shortcodes on pages
+
+# Version 1.2
+
+Version 1.2 adds:
+- Booking status actions
+- Admin calendar view
+- Service deletion
+- Settings page
+- Logo-colored admin styling
+
+## Shortcodes
+- [booklyft_services]
+- [booklyft_booking_form]
+- [booklyft_calendar]
