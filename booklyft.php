@@ -222,14 +222,7 @@ class Booklyft {
         ];
         $subject = $subjects[$type] ?? $subjects['created'];
         $verb = $verbs[$type] ?? 'updated';
-
-$body = "Hello {$booking->customer_name},\n\n"
-      . "Your booking for {$service->name} has been {$verb}.\n"
-      . "Date: {$booking->booking_date}\n"
-      . "Time: {$booking->booking_time}\n"
-      . "Status: {$booking->status}\n\n"
-      . "Thank you,\n"
-      . $settings['brand_name'];
+        $body = "Hello {$booking->customer_name},\n\nYour booking for {$service->name} has been {$verb}.\nDate: {$booking->booking_date}\nTime: {$booking->booking_time}\nStatus: {$booking->status}\n\nThank you,\n{$settings['brand_name']}";
 
         return [$subject, $body];
     }
