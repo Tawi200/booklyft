@@ -3,7 +3,7 @@
 Plugin Name: Booklyft
 Description: Booking system with editable bookings, rescheduling, email templates, services, admin management, and notifications.
 Version: 1.5.0
-Author: Perplexity
+Author: Tawanda Onyimo
 Text Domain: booklyft
 */
 
