@@ -1,16 +1,16 @@
 <?php
 /*
 Plugin Name: Booklyft
-Description: Booking system with editable bookings, rescheduling, email templates, services, admin management, and notifications.
-Version: 1.5.0
-Author: Tawanda Onyimo
+Description: Booking system with AJAX rescheduling, editable bookings, email templates, services, admin management, and notifications.
+Version: 1.6.0
+Author: Perplexity
 Text Domain: booklyft
 */
 
 if (!defined('ABSPATH')) exit;
 
 class Booklyft {
-    const VERSION = '1.5.0';
+    const VERSION = '1.6.0';
     const BOOKINGS_TABLE = 'booklyft_bookings';
     const SERVICES_TABLE = 'booklyft_services';
     const SETTINGS_KEY = 'booklyft_settings';
@@ -153,7 +153,26 @@ class Booklyft {
         $s = $this->get_settings();
         return '<style>
         #adminmenu #toplevel_page_booklyft .wp-menu-image:before,#adminmenu #toplevel_page_booklyft.current .wp-menu-image:before{color:' . esc_attr($s['admin_accent']) . '}
-        .booklyft-wrap{max-width:1200px;margin:20px 20px 20px 0;padding:0}.booklyft-card{background:#fff;border:1px solid #eed9d7;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:18px;margin:0 0 18px}.booklyft-hero{background:linear-gradient(135deg,' . esc_attr($s['admin_color']) . ',' . esc_attr($s['admin_accent']) . ');color:#fff;border-radius:16px;padding:20px 22px;margin-bottom:18px}.booklyft-hero h1,.booklyft-hero h2{color:#fff;margin:0}.booklyft-btn,.button.button-primary{background:' . esc_attr($s['admin_color']) . ';border-color:' . esc_attr($s['admin_color']) . ';color:#fff}.booklyft-btn:hover,.button.button-primary:hover{background:' . esc_attr($s['admin_accent']) . ';border-color:' . esc_attr($s['admin_accent']) . ';color:#fff}.booklyft-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #eed9d7;border-radius:10px;overflow:hidden}.booklyft-table th{background:#fbeceb;color:' . esc_attr($s['admin_color']) . ';text-align:left;padding:10px;border-bottom:1px solid #eed9d7}.booklyft-table td{padding:10px;border-bottom:1px solid #f2e3e1;vertical-align:top}.booklyft-field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}.booklyft-field input,.booklyft-field select,.booklyft-field textarea{padding:10px;border:1px solid #d8c2bf;border-radius:8px}.booklyft-field input:focus,.booklyft-field select:focus,.booklyft-field textarea:focus{border-color:' . esc_attr($s['admin_accent']) . ';box-shadow:0 0 0 1px ' . esc_attr($s['admin_accent']) . ';outline:none}.booklyft-pill{display:inline-block;background:#fbeceb;color:' . esc_attr($s['admin_color']) . ';padding:5px 10px;border-radius:999px;font-size:12px}.booklyft-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.booklyft-slot{display:inline-block;margin:4px 6px 4px 0;padding:8px 10px;border-radius:999px;border:1px solid #d8c2bf;background:#fff}.booklyft-slot.booklyft-slot-busy{opacity:.45;text-decoration:line-through}.booklyft-day{background:#fff;border:1px solid #eed9d7;border-radius:12px;padding:14px}.booklyft-day h3{margin-top:0;color:' . esc_attr($s['admin_color']) . '}.booklyft-day ul{margin:0;padding-left:18px}</style>';
+        .booklyft-wrap{max-width:1200px;margin:20px 20px 20px 0;padding:0}
+        .booklyft-card{background:#fff;border:1px solid #eed9d7;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:18px;margin:0 0 18px}
+        .booklyft-hero{background:linear-gradient(135deg,' . esc_attr($s['admin_color']) . ',' . esc_attr($s['admin_accent']) . ');color:#fff;border-radius:16px;padding:20px 22px;margin-bottom:18px}
+        .booklyft-hero h1,.booklyft-hero h2{color:#fff;margin:0}
+        .booklyft-btn,.button.button-primary{background:' . esc_attr($s['admin_color']) . ';border-color:' . esc_attr($s['admin_color']) . ';color:#fff}
+        .booklyft-btn:hover,.button.button-primary:hover{background:' . esc_attr($s['admin_accent']) . ';border-color:' . esc_attr($s['admin_accent']) . ';color:#fff}
+        .booklyft-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #eed9d7;border-radius:10px;overflow:hidden}
+        .booklyft-table th{background:#fbeceb;color:' . esc_attr($s['admin_color']) . ';text-align:left;padding:10px;border-bottom:1px solid #eed9d7}
+        .booklyft-table td{padding:10px;border-bottom:1px solid #f2e3e1;vertical-align:top}
+        .booklyft-field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+        .booklyft-field input,.booklyft-field select,.booklyft-field textarea{padding:10px;border:1px solid #d8c2bf;border-radius:8px}
+        .booklyft-field input:focus,.booklyft-field select:focus,.booklyft-field textarea:focus{border-color:' . esc_attr($s['admin_accent']) . ';box-shadow:0 0 0 1px ' . esc_attr($s['admin_accent']) . ';outline:none}
+        .booklyft-pill{display:inline-block;background:#fbeceb;color:' . esc_attr($s['admin_color']) . ';padding:5px 10px;border-radius:999px;font-size:12px}
+        .booklyft-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+        .booklyft-slot{display:inline-block;margin:4px 6px 4px 0;padding:8px 10px;border-radius:999px;border:1px solid #d8c2bf;background:#fff}
+        .booklyft-slot.booklyft-slot-busy{opacity:.45;text-decoration:line-through}
+        .booklyft-day{background:#fff;border:1px solid #eed9d7;border-radius:12px;padding:14px}
+        .booklyft-day h3{margin-top:0;color:' . esc_attr($s['admin_color']) . '}
+        .booklyft-day ul{margin:0;padding-left:18px}
+        </style>';
     }
 
     public function enqueue_admin_assets() {
@@ -222,8 +241,13 @@ class Booklyft {
         ];
         $subject = $subjects[$type] ?? $subjects['created'];
         $verb = $verbs[$type] ?? 'updated';
-        $body = "Hello {$booking->customer_name},\n\nYour booking for {$service->name} has been {$verb}.\nDate: {$booking->booking_date}\nTime: {$booking->booking_time}\nStatus: {$booking->status}\n\nThank you,\n{$settings['brand_name']}";
-
+        $body = "Hello {$booking->customer_name},\n\n"
+              . "Your booking for {$service->name} has been {$verb}.\n"
+              . "Date: {$booking->booking_date}\n"
+              . "Time: {$booking->booking_time}\n"
+              . "Status: {$booking->status}\n\n"
+              . "Thank you,\n"
+              . $settings['brand_name'];
         return [$subject, $body];
     }
 
@@ -341,7 +365,10 @@ class Booklyft {
         $service_id = absint($_POST['service_id']);
         $date = sanitize_text_field($_POST['booking_date']);
         $time = sanitize_text_field($_POST['booking_time']);
-        $busy = (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE booking_date=%s AND booking_time=%s AND status IN ('pending','confirmed')" . ($booking_id ? " AND id!=%d" : ""), $booking_id ? [$date, $time, $booking_id] : [$date, $time]));
+        $busy = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE booking_date=%s AND booking_time=%s AND status IN ('pending','confirmed')" . ($booking_id ? " AND id!=%d" : ""),
+            $booking_id ? [$date, $time, $booking_id] : [$date, $time]
+        ));
         if ($busy > 0) wp_die('Selected time is already booked');
 
         $data = [
@@ -377,33 +404,6 @@ class Booklyft {
         exit;
     }
 
-    
-
-    public function edit_booking_page() {
-        if (!current_user_can('manage_options')) wp_die('Unauthorized');
-        global $wpdb;
-        echo $this->admin_css();
-        $id = absint($_GET['id'] ?? 0);
-        $booking = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE id=%d", $id));
-        if (!$booking) { echo '<div class="wrap"><h1>Booking not found</h1></div>'; return; }
-        $services = $wpdb->get_results("SELECT id,name,duration FROM {$wpdb->prefix}" . self::SERVICES_TABLE . " WHERE active=1 ORDER BY name ASC");
-        $edit_nonce = wp_create_nonce('booklyft_edit_' . $id);
-        $res_nonce = wp_create_nonce('booklyft_reschedule_' . $id);
-        echo '<div class="wrap booklyft-wrap"><div class="booklyft-hero"><h1>Edit Booking #' . intval($booking->id) . '</h1><p>Update customer details, date, time, and status.</p></div>';
-        echo '<div class="booklyft-card"><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="booklyft_edit_booking"><input type="hidden" name="id" value="' . intval($booking->id) . '"><input type="hidden" name="booklyft_nonce" value="' . esc_attr($edit_nonce) . '"><div class="booklyft-grid">';
-        echo '<div class="booklyft-field"><label>Name</label><input type="text" name="customer_name" value="' . esc_attr($booking->customer_name) . '"></div>';
-        echo '<div class="booklyft-field"><label>Email</label><input type="email" name="customer_email" value="' . esc_attr($booking->customer_email) . '"></div>';
-        echo '<div class="booklyft-field"><label>Phone</label><input type="text" name="customer_phone" value="' . esc_attr($booking->customer_phone) . '"></div>';
-        echo '<div class="booklyft-field"><label>Service</label><select name="service_id">';
-        foreach ($services as $service) echo '<option value="' . esc_attr($service->id) . '" ' . selected($booking->service_id, $service->id, false) . '>' . esc_html($service->name) . '</option>';
-        echo '</select></div>';
-        echo '<div class="booklyft-field"><label>Date</label><input type="date" name="booking_date" value="' . esc_attr($booking->booking_date) . '" id="booklyft-edit-date"></div>';
-        echo '<div class="booklyft-field"><label>Time</label><input type="time" name="booking_time" value="' . esc_attr(substr($booking->booking_time,0,5)) . '" id="booklyft-edit-time"></div>';
-        echo '<div class="booklyft-field"><label>Status</label><select name="status"><option value="pending" ' . selected($booking->status,'pending',false) . '>pending</option><option value="confirmed" ' . selected($booking->status,'confirmed',false) . '>confirmed</option><option value="cancelled" ' . selected($booking->status,'cancelled',false) . '>cancelled</option><option value="completed" ' . selected($booking->status,'completed',false) . '>completed</option></select></div>';
-        echo '</div><div class="booklyft-field"><label>Notes</label><textarea name="notes" rows="4">' . esc_textarea($booking->notes) . '</textarea></div><p><button class="button button-primary" type="submit">Save Changes</button></p></form></div>';
-        echo '<div class="booklyft-card"><h2>Reschedule</h2><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="booklyft_reschedule_booking"><input type="hidden" name="id" value="' . intval($booking->id) . '"><input type="hidden" name="booklyft_nonce" value="' . esc_attr($res_nonce) . '"><p>Use this to move the booking and send a rescheduled email.</p><p><button class="button" type="submit">Reschedule This Booking</button></p></form></div></div>';
-    }
-
     public function admin_page() {
         global $wpdb;
         echo $this->admin_css();
@@ -418,7 +418,9 @@ class Booklyft {
         echo '</tbody></table></div></div>';
     }
 
-    public function calendar_page() { echo do_shortcode('[booklyft_calendar]'); }
+    public function calendar_page() {
+        echo do_shortcode('[booklyft_calendar]');
+    }
 
     public function services_page() {
         global $wpdb;
@@ -500,9 +502,11 @@ class Booklyft {
         if (!current_user_can('manage_options')) wp_die('Unauthorized');
         $id = absint($_POST['id'] ?? 0);
         if (!isset($_POST['booklyft_nonce']) || !wp_verify_nonce($_POST['booklyft_nonce'], 'booklyft_edit_' . $id)) wp_die('Invalid nonce');
+
         global $wpdb;
         $booking = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}" . self::BOOKINGS_TABLE . " WHERE id=%d", $id));
         if (!$booking) wp_die('Booking not found');
+
         $data = [
             'service_id' => absint($_POST['service_id']),
             'customer_name' => sanitize_text_field($_POST['customer_name']),
@@ -514,6 +518,7 @@ class Booklyft {
             'notes' => sanitize_textarea_field($_POST['notes'] ?? ''),
             'updated_at' => current_time('mysql'),
         ];
+
         $wpdb->update($wpdb->prefix . self::BOOKINGS_TABLE, $data, ['id' => $id]);
         wp_redirect(admin_url('admin.php?page=booklyft-edit-booking&id=' . $id . '&updated=1'));
         exit;
@@ -528,3 +533,6 @@ class Booklyft {
         $this->handle_booking();
     }
 }
+
+register_activation_hook(__FILE__, ['Booklyft', 'activate']);
+new Booklyft();
