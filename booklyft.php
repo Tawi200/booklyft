@@ -3,7 +3,7 @@
 Plugin Name: Booklyft
 Description: Booking system with AJAX rescheduling, editable bookings, email templates, services, admin management, and notifications.
 Version: 1.6.0
-Author: Perplexity
+Author: Tawanda Onyimo
 Text Domain: booklyft
 */
 
@@ -251,67 +251,88 @@ class Booklyft {
         return [$subject, $body];
     }
 
-    public function booking_form_shortcode() {
-        global $wpdb;
-        $services = $wpdb->get_results("SELECT id,name,price,duration FROM {$wpdb->prefix}" . self::SERVICES_TABLE . " WHERE active=1 ORDER BY name ASC");
-        $s = $this->get_settings();
-        ob_start();
-        ?>
-        <div class="booklyft-wrap">
-            <div class="booklyft-hero"><h2><?php echo esc_html($s['brand_name']); ?></h2><p>Book your appointment in a few simple steps.</p></div>
-            <div class="booklyft-card">
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="booklyft-form">
-                    <input type="hidden" name="action" value="booklyft_submit_booking">
-                    <input type="hidden" name="booking_id" value="0">
-                    <?php wp_nonce_field('booklyft_book', 'booklyft_nonce'); ?>
-                    <div class="booklyft-grid">
-                        <div class="booklyft-field"><label>Name</label><input required type="text" name="customer_name"></div>
-                        <div class="booklyft-field"><label>Email</label><input required type="email" name="customer_email"></div>
-                        <div class="booklyft-field"><label>Phone</label><input type="text" name="customer_phone"></div>
-                        <div class="booklyft-field"><label>Service</label><select required name="service_id" id="booklyft-service"><?php foreach ($services as $service) : ?><option value="<?php echo esc_attr($service->id); ?>"><?php echo esc_html($service->name . ' - ' . intval($service->duration) . ' mins'); ?></option><?php endforeach; ?></select></div>
-                        <div class="booklyft-field"><label>Date</label><input required type="date" name="booking_date" id="booklyft-date"></div>
-                        <div class="booklyft-field"><label>Time</label><select required name="booking_time" id="booklyft-time"><option value="">Choose a date first</option></select></div>
-                    </div>
-                    <div class="booklyft-field"><label>Notes</label><textarea name="notes" rows="4"></textarea></div>
-                    <button class="booklyft-btn" type="submit">Submit Booking</button>
-                </form>
-            </div>
-            <div class="booklyft-card"><h3>Today’s Slots</h3><div id="booklyft-slot-list"></div></div>
+    public function booking_form_shortcode($atts = []) {
+    global $wpdb;
+
+    $atts = shortcode_atts([
+        'form_class' => 'booklyft-booking-form',
+        'wrapper_class' => 'booklyft-wrap',
+    ], $atts, 'booklyft_booking_form');
+
+    $services = $wpdb->get_results("SELECT id,name,price,duration FROM {$wpdb->prefix}" . self::SERVICES_TABLE . " WHERE active=1 ORDER BY name ASC");
+    $s = $this->get_settings();
+
+    ob_start();
+    ?>
+    <div class="<?php echo esc_attr($atts['wrapper_class']); ?>">
+        <div class="booklyft-hero">
+            <h2><?php echo esc_html($s['brand_name']); ?></h2>
+            <p>Book your appointment in a few simple steps.</p>
         </div>
-        <script>
-        (function(){
-          const dateEl=document.getElementById('booklyft-date');
-          const timeEl=document.getElementById('booklyft-time');
-          const slotList=document.getElementById('booklyft-slot-list');
-          async function loadSlots(){
-            const date=dateEl.value;
-            if(!date)return;
-            const url=new URL('<?php echo esc_url(admin_url('admin-ajax.php')); ?>');
-            url.searchParams.set('action','booklyft_get_slots');
-            url.searchParams.set('date',date);
-            const res=await fetch(url);
-            const json=await res.json();
-            timeEl.innerHTML='';
-            slotList.innerHTML='';
-            (json.data.slots||[]).forEach(s=>{
-              const o=document.createElement('option');
-              o.value=s.time;
-              o.textContent=s.time+(s.available?'':' (booked)');
-              if(!s.available)o.disabled=true;
-              timeEl.appendChild(o);
-              const span=document.createElement('span');
-              span.className='booklyft-slot '+(s.available?'':'booklyft-slot-busy');
-              span.textContent=s.time;
-              slotList.appendChild(span);
-            });
-          }
-          dateEl.addEventListener('change',loadSlots);
-          if(dateEl.value) loadSlots();
-        })();
-        </script>
-        <?php
-        return ob_get_clean();
-    }
+
+        <div class="booklyft-card <?php echo esc_attr($atts['form_class']); ?>">
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" id="booklyft-form">
+                <input type="hidden" name="action" value="booklyft_submit_booking">
+                <input type="hidden" name="booking_id" value="0">
+                <?php wp_nonce_field('booklyft_book', 'booklyft_nonce'); ?>
+
+                <div class="booklyft-grid">
+                    <div class="booklyft-field"><label>Name</label><input required type="text" name="customer_name"></div>
+                    <div class="booklyft-field"><label>Email</label><input required type="email" name="customer_email"></div>
+                    <div class="booklyft-field"><label>Phone</label><input type="text" name="customer_phone"></div>
+                    <div class="booklyft-field"><label>Service</label><select required name="service_id" id="booklyft-service"><?php foreach ($services as $service) : ?><option value="<?php echo esc_attr($service->id); ?>"><?php echo esc_html($service->name . ' - ' . intval($service->duration) . ' mins'); ?></option><?php endforeach; ?></select></div>
+                    <div class="booklyft-field"><label>Date</label><input required type="date" name="booking_date" id="booklyft-date"></div>
+                    <div class="booklyft-field"><label>Time</label><select required name="booking_time" id="booklyft-time"><option value="">Choose a date first</option></select></div>
+                </div>
+
+                <div class="booklyft-field"><label>Notes</label><textarea name="notes" rows="4"></textarea></div>
+                <button class="booklyft-btn" type="submit">Submit Booking</button>
+            </form>
+        </div>
+
+        <div class="booklyft-card"><h3>Today’s Slots</h3><div id="booklyft-slot-list"></div></div>
+    </div>
+    <script>
+    (function(){
+      const dateEl = document.getElementById('booklyft-date');
+      const timeEl = document.getElementById('booklyft-time');
+      const slotList = document.getElementById('booklyft-slot-list');
+
+      async function loadSlots() {
+        const date = dateEl.value;
+        if (!date) return;
+
+        const url = new URL('<?php echo esc_url(admin_url('admin-ajax.php')); ?>');
+        url.searchParams.set('action', 'booklyft_get_slots');
+        url.searchParams.set('date', date);
+
+        const res = await fetch(url);
+        const json = await res.json();
+
+        timeEl.innerHTML = '';
+        slotList.innerHTML = '';
+
+        (json.data.slots || []).forEach(s => {
+          const o = document.createElement('option');
+          o.value = s.time;
+          o.textContent = s.time + (s.available ? '' : ' (booked)');
+          if (!s.available) o.disabled = true;
+          timeEl.appendChild(o);
+
+          const span = document.createElement('span');
+          span.className = 'booklyft-slot ' + (s.available ? '' : 'booklyft-slot-busy');
+          span.textContent = s.time;
+          slotList.appendChild(span);
+        });
+      }
+
+      dateEl.addEventListener('change', loadSlots);
+      if (dateEl.value) loadSlots();
+    })();
+    </script>
+    <?php
+    return ob_get_clean();
+}
 
     public function calendar_shortcode() {
         global $wpdb;
@@ -524,6 +545,7 @@ class Booklyft {
         exit;
     }
 
+    
     public function handle_reschedule_booking() {
         if (!current_user_can('manage_options')) wp_die('Unauthorized');
         $id = absint($_POST['id'] ?? 0);
